@@ -1,6 +1,8 @@
 #include <TFT_eSPI.h>       
 #include "strings.h" 
 #include "font.h"
+#include "intro.h"
+#include "intromessa.h"
 #include "outro.h"
 #include "collision_map.h"
 #include "bottom_layer.h"
@@ -8,10 +10,13 @@
 #include "top_layer.h"
 #include "cristobal.h"
 #include "carol.h"
+#include "swimmer.h"
 #include "vecina.h"
 #include "dog.h"
 #include "fire.h"
 #include <SPI.h>
+
+
 
 TFT_eSPI tft = TFT_eSPI();  
 TFT_eSprite frameBuffer = TFT_eSprite(&tft); 
@@ -43,11 +48,16 @@ uint8_t animationCounter = 0;
 #define HEIGHT 135
 #define MAPWIDTH 50
 #define MAPHEIGHT 50
-#define MESSAGEWIDTH 21
+#define MESSAGEWIDTH 20
+
+
 
 unsigned long lastTimeDisplayed = 0;
 
 unsigned long framePeriod = 100;
+
+unsigned long lastSceneDisplayed = 0;
+unsigned long scenePeriod = 1000;
 
 unsigned long lastCharacterDisplayed = 0;
 uint8_t characterDelay = 25;
@@ -61,9 +71,7 @@ int xBackgroundOffset = 0;
 int yBackgroundOffset = 0;
 
 
-int playerMoveSpeed = 4;
-int xTarget = 0;
-byte messagePointer =0;
+int playerMoveSpeed = 2;
 bool showMessage = 0;
 String currentMessage = TEXT_2;
 int phraseStart = 0;
@@ -92,6 +100,8 @@ typedef struct {
 #define RECEIVE_MATCHES 2
 #define LIT_FIRE 3
 #define MOVE_CAR 4
+#define TAKE_PICTURE 5
+#define FINALE 6
 
 #define EMPTY_TILE 0
 #define DOGS 3
@@ -107,10 +117,13 @@ typedef struct {
 #define SOCK 95
 #define SNEACKER 88
 #define TABLET 89
+#define TABLE 82
 #define MUSHROOM 103
 #define KEY 126
 #define SHORTS 125
 #define FIRECAMP 127
+#define SWIMMER 10
+#define SIGN 69
 
 //inventory
 bool matches = 0;
@@ -124,20 +137,21 @@ bool waterbottle = 0;
 byte eggs = 0;
 bool mushroom = 0;
 
-
-
 sprite carol = {96, 64, 32, 32, carolSprite,3, 27, 10, -864, -320, 0, 0};
-sprite cristobal = {128, 64, 32, 32, cristobalSprite, 3, 29, 13, -800, -352, 0, 0};
+sprite cristobal = {128, 64, 32, 32, cristobalSprite, 3, 29, 13, -800, -352, 0, 2};
+sprite swimmer = {0, 9, 32, 32, swimmerSprite, 3, 12, 44, 0, 0, 0, 0};
 sprite vecina = {0, 0, 32, 32, vecinaSprite, 3, 38, 8, 0,  0, 1};
 sprite dog1 = {0, 0, 32, 32, dogSprite, 3, 44, 16, 0, 0, 1};
 sprite dog2 = {0, 0, 32, 32, dogSprite, 3, 45, 17, 0, 0, 1};
 sprite fire = {0, 0, 32, 32, fireSprite, 3, 0, 0, 0, 0, 1};
-sprite * spriteList[5] = {
+
+sprite * spriteList[6] = {
   &cristobal,
   &vecina,
   &dog1,
   &dog2,
   &fire,
+  &swimmer,
 };
 sprite * players[2] = {
   &carol,
@@ -148,6 +162,12 @@ int * backgroundLayers[1][2500]={
   *bottomLayer,
 };
 bool currentPlayer = 0;
+
+void initPlayer(){
+  xBackgroundOffset = players[currentPlayer]->xTarget;
+  yBackgroundOffset = players[currentPlayer]->yTarget;
+  spriteList[0] = players[!currentPlayer];
+}
 
 void loadItem(int id, int x, int y){
     collisionMap[y][x] = id;
@@ -184,16 +204,31 @@ void litFire(){
 void setTent(){
   loadItem(93,24,12);
   loadItem(94,25,12);
-  currentPlayer = 0;
-  cristobal.xMap=24;
-  cristobal.yMap=13;
-  currentPlayer = 1;
+  cristobal.xTarget=-20*TILESIZE;
+  cristobal.yTarget=-11*TILESIZE;
 }
 void moveNeighbour(){
   vecina.xMap = 36;
   vecina.yMap = 13;
   vecina.direction = random(4);
 }
+void takePicture(){
+  swimmer.xMap = 5;
+  swimmer.yMap = 36;
+  swimmer.direction=3;
+  cristobal.xTarget=-1*TILESIZE;
+  cristobal.yTarget=-32*TILESIZE;
+  carol.xTarget=-3*TILESIZE;
+  carol.yTarget=-32*TILESIZE;
+  cristobal.xMap=5;
+  cristobal.yMap=34;
+  carol.xMap=6;
+  carol.yMap=34;
+  initPlayer();
+}
+
+
+
 
 
 void performAction(){
@@ -216,6 +251,14 @@ void performAction(){
       loadItem(KEY, 47,26);
       level=5;
       break;
+    case TAKE_PICTURE:
+      takePicture();
+      level=10;
+      lastSceneDisplayed=millis();
+      scene++;
+      break;
+    case FINALE:
+      scene=3;
   }
   performActionFlag = 0;
 }
@@ -252,6 +295,25 @@ void displayMessage(){
    showMessage = 1;
    loadPhrase();  
 }
+
+
+void prepareFinale(){
+  currentMessage = TEXT_46;
+  displayMessage();
+  cristobal.xTarget=-24*TILESIZE;
+  cristobal.yTarget=-10*TILESIZE;
+  carol.xTarget=-24*TILESIZE;
+  carol.yTarget=-11*TILESIZE;
+  cristobal.xMap=28;
+  cristobal.yMap=12;
+  carol.xMap=27;
+  carol.yMap=13;
+  initPlayer();
+  loadItem(GUITAR, 24, 15);
+
+}
+
+
 
 void checkEvents(){
   int collisionTile = 0;
@@ -300,15 +362,28 @@ void checkEvents(){
       // code block
       if (!showMessage){     
           if (currentPlayer==0){
+            if (sneackers>=2){
+              currentMessage = TEXT_41;
+              displayMessage();
+            }else{
               currentMessage = TEXT_18;
               displayMessage();
-              loadItem(SNEACKER,3,6);
-              loadItem(SNEACKER,31,3);
+              if (sneackers<1){
+                loadItem(SNEACKER,3,6);
+                loadItem(SNEACKER,31,3);
+              }
+            }
           } 
            else{
+             if (waterbottle){
+              currentMessage = TEXT_42;
+              displayMessage();
+             } else {
               currentMessage = TEXT_17;
               displayMessage();
+            
               loadItem(WATERBOTTLE,2,19);
+             }
           } 
       }
     break;
@@ -321,6 +396,25 @@ void checkEvents(){
               loadItem(0,47,26);
               keys=1;
           } 
+      }
+    break;
+    case SIGN:
+      // code block
+      if (!showMessage){
+              currentMessage = TEXT_48;
+              displayMessage();
+      }
+    break;
+    case TABLE:
+      // code block
+      if (!showMessage){
+          if (currentPlayer){
+              currentMessage = TEXT_3;
+              displayMessage();
+          } else {
+            currentMessage = TEXT_2;
+              displayMessage();
+          }
       }
     break;
     case WATERBOTTLE:
@@ -339,14 +433,24 @@ void checkEvents(){
       if (!showMessage){
         if (level==7){
           if (currentPlayer==0){
+            if (socks>=2){
+              currentMessage = TEXT_41;
+              displayMessage();
+            }else {
               currentMessage = TEXT_15;
               displayMessage();
               loadItem(SOCK,43,33);
               loadItem(SOCK,34,13);
+            }
           } else {
+            if (shorts){
+              currentMessage = TEXT_42;
+              displayMessage();
+            } else {
               currentMessage = TEXT_16;
               displayMessage();
               loadItem(SHORTS,33,34);
+            }
           }
         }
       }
@@ -399,8 +503,46 @@ void checkEvents(){
               currentMessage = TEXT_28;
               displayMessage();
               pegs = 1;
-              loadItem(EMPTY_TILE,34,3);
+              loadItem(EMPTY_TILE,collisionTileX,collisionTileY);
           } 
+      }
+    break;
+    case TABLET:
+      // code block
+      if (!showMessage){
+        currentMessage = TEXT_39;
+        displayMessage();
+        tablet = 1;
+        loadItem(EMPTY_TILE,collisionTileX,collisionTileY);
+      }
+    break;
+    case GUITAR:
+      // code block
+      if (!showMessage){
+        currentMessage = TEXT_47;
+        displayMessage();
+        performActionFlag=FINALE;
+        loadItem(EMPTY_TILE,collisionTileX,collisionTileY);
+      }
+    break;
+    case SWIMMER:
+      // code block
+      if (!showMessage){
+          if (currentPlayer==0){
+            if (tablet){
+              currentMessage = TEXT_40;
+              displayMessage();
+              performActionFlag = TAKE_PICTURE;
+            }else {
+              currentMessage = TEXT_20;
+              displayMessage();
+              loadItem(TABLET,2,22);
+            }
+          } 
+          else {
+            currentMessage = TEXT_12;
+            displayMessage();
+          }
       }
     break;
     case DOGS:
@@ -450,14 +592,54 @@ void checkEvents(){
               
           }
       }
+      case EGG:
+      // code block
+      if (!showMessage){
+          if (currentPlayer){
+              eggs++;
+              currentMessage = String(eggs) + TEXT_45;
+              loadItem(EMPTY_TILE,collisionTileX,collisionTileY);
+              displayMessage();
+          }
+      }
+      case SNEACKER:
+      // code block
+      if (!showMessage){
+          if (currentPlayer==0){
+              sneackers++;
+              currentMessage = String(sneackers) + TEXT_38;
+               loadItem(EMPTY_TILE,collisionTileX,collisionTileY);
+               displayMessage();   
+          }
+      }
       case SHORTS:
       // code block
       if (!showMessage){
-          if (currentPlayer==1){
+          if (currentPlayer){
               currentMessage = TEXT_35;
-              shorts++;
+              shorts=1;
               displayMessage();
               loadItem(EMPTY_TILE, 33,34);
+          }
+      }
+      case MUSHROOM:
+      // code block
+      if (!showMessage){
+          if (currentPlayer){
+              currentMessage = TEXT_44;
+              displayMessage();
+              loadItem(EGG, 18,36);
+              loadItem(EGG, 16,35);
+              loadItem(EGG, 30,40);
+              loadItem(EGG, 18,31);
+              loadItem(EGG, 12,22);
+              loadItem(EGG, 2,15);
+              loadItem(EGG, 36,27);
+              loadItem(EGG, 43,2);
+              loadItem(EGG, 46,41);
+              loadItem(EGG, 22,21);
+              loadItem(EMPTY_TILE,collisionTileX,collisionTileY);
+              level++;
           }
       }
       break;
@@ -490,7 +672,7 @@ void checkEvents(){
                 loadPhrase();    
                 performActionFlag = MOVE_CAR;  
             }
-          }
+          } 
         }
       }
       break;
@@ -498,8 +680,14 @@ void checkEvents(){
       // code block
       return;
   }
-  if (socks>=2 && shorts==1&&level<8){
+  if (socks>=2 &&shorts&&level<8){
     level=8;
+  }
+  if (waterbottle && sneackers>=2 && level <9){
+    level=9;
+  }
+  if (eggs>=10){
+      prepareFinale();
   }
 }
 
@@ -513,10 +701,6 @@ rightButtonState =  digitalRead(RIGHT_PIN);
 midButtonState =  digitalRead(MID_PIN);
 setButtonState =  digitalRead(SET_PIN);
 rstButtonState =  digitalRead(RST_PIN); 
-}
-
-void intro(){
-  scene++;
 }
 
 
@@ -627,11 +811,7 @@ void draw(){
     
 }
 
-void initPlayer(){
-  xBackgroundOffset = players[currentPlayer]->xTarget;
-  yBackgroundOffset = players[currentPlayer]->yTarget;
-  spriteList[0] = players[!currentPlayer];
-}
+
 
 void movePlayer() {
 
@@ -639,8 +819,18 @@ void movePlayer() {
 
   if(collisionMap[player->yMap][player->xMap]==WATER){
      playerMoveSpeed=1;
+      if (currentPlayer){
+          player->bitmap = cristobalBathingSuitSprite;
+      }else {
+         player->bitmap = carolBathingSuiteSprite;
+      }
   } else{
      playerMoveSpeed=4;
+       if (currentPlayer){
+          player->bitmap = cristobalSprite;
+      }else {
+         player->bitmap = carolSprite;
+      }
   }
   if (player->yTarget < yBackgroundOffset) { //SOUTH
     yBackgroundOffset -= playerMoveSpeed; //player will move based on set value of playerMoveSpeed
@@ -717,6 +907,14 @@ void game(){
 
   draw();
   if (millis()> lastDebounceCheck + debounceDelay){
+   if (lastRstButtonState!=rstButtonState){
+      if (!rstButtonState){
+          playerMoveSpeed = !(playerMoveSpeed-1) + 1;
+      }
+     lastRstButtonState = rstButtonState;
+  }
+  }
+  if (millis()> lastDebounceCheck + debounceDelay){
    if (lastSetButtonState!=setButtonState){
       if (!setButtonState){
           currentPlayer=!currentPlayer;
@@ -736,15 +934,37 @@ void game(){
      lastMidButtonState = midButtonState;
    }
  }
-  movePlayer();
+ if (!showMessage){
+    movePlayer();
+  }
   checkEvents();
 }
+
+void intro(){
+  frameBuffer.pushImage(0,0,240,135, introAnimation[animationCounter/2]);
+  if ((millis()> lastSceneDisplayed + scenePeriod)&&!midButtonState){
+    scene++;
+    lastSetButtonState = setButtonState;
+  }
+}
+void intromessa(){
+  frameBuffer.pushImage(0,0,240,135, intromessaBitmap);
+   if ((millis()> lastSceneDisplayed + scenePeriod&&!midButtonState)){
+    currentMessage = TEXT_43;
+    displayMessage();
+    loadItem(MUSHROOM,24,42);
+    scene--;
+    lastSetButtonState = setButtonState;
+  }
+}
+
 
 void outro(){
   frameBuffer.pushImage(0,0,240,135, outroAnimation[animationCounter]);
 }
 
 void setup() {
+
   pinMode(UP_PIN, INPUT_PULLUP);
   pinMode(DOWN_PIN, INPUT_PULLUP);
   pinMode(LEFT_PIN, INPUT_PULLUP);
@@ -752,6 +972,7 @@ void setup() {
   pinMode(MID_PIN, INPUT_PULLUP);
   pinMode(SET_PIN, INPUT_PULLUP);
   pinMode(RST_PIN, INPUT_PULLUP);
+
   Serial.begin(115200);
   tft.init();
   tft.setRotation(1);
@@ -760,9 +981,13 @@ void setup() {
   frameBuffer.createSprite(WIDTH, HEIGHT);
   frameBuffer.fillSprite(TFT_WHITE);
   frameBuffer.setTextColor(0xFF3D);
+  frameBuffer.setSwapBytes(true);
   initPlayer();
   loadItem(PAN, 28,32);
   loadItem(PEGS,34, 3);
+  lastSceneDisplayed = millis();
+  currentMessage = TEXT_1;
+  displayMessage();
 }
 
 
@@ -775,6 +1000,9 @@ void loop() {
     game();
     break;
   case 2:
+    intromessa();
+    break;
+  case 3:
     outro();
     break;
 }
