@@ -17,7 +17,6 @@
 #include <SPI.h>
 
 
-
 TFT_eSPI tft = TFT_eSPI();  
 TFT_eSprite frameBuffer = TFT_eSprite(&tft); 
 
@@ -200,12 +199,11 @@ void moveDogs(){
 void litFire(){
   fire.xMap = 27;
   fire.yMap = 12;
+  topLayer[12][27]=0;
 }
 void setTent(){
   loadItem(93,24,12);
   loadItem(94,25,12);
-  cristobal.xTarget=-20*TILESIZE;
-  cristobal.yTarget=-11*TILESIZE;
 }
 void moveNeighbour(){
   vecina.xMap = 36;
@@ -259,6 +257,7 @@ void performAction(){
       break;
     case FINALE:
       scene=3;
+    break;
   }
   performActionFlag = 0;
 }
@@ -298,8 +297,6 @@ void displayMessage(){
 
 
 void prepareFinale(){
-  currentMessage = TEXT_46;
-  displayMessage();
   cristobal.xTarget=-24*TILESIZE;
   cristobal.yTarget=-10*TILESIZE;
   carol.xTarget=-24*TILESIZE;
@@ -310,7 +307,8 @@ void prepareFinale(){
   carol.yMap=13;
   initPlayer();
   loadItem(GUITAR, 24, 15);
-
+  currentMessage = TEXT_46;
+  displayMessage();
 }
 
 
@@ -482,6 +480,12 @@ void checkEvents(){
               performActionFlag = LIT_FIRE;
           } 
         } 
+         if (pegs==0&&currentPlayer){
+          if (level<5&&level>0){
+            currentMessage = TEXT_3;
+            displayMessage();
+          }
+        }
         if (pegs&&currentPlayer==1){
           if (level<5){
             currentMessage = TEXT_33;
@@ -494,6 +498,7 @@ void checkEvents(){
             pegs=0;
           }
         }
+       
       }
     break;
     case PEGS:
@@ -592,16 +597,24 @@ void checkEvents(){
               
           }
       }
+      break;
       case EGG:
       // code block
-      if (!showMessage){
-          if (currentPlayer){
+        if (!showMessage){
+            if (currentPlayer){
               eggs++;
+              if (eggs>=10){
+                eggs=0;
+                prepareFinale();
+              } else {
               currentMessage = String(eggs) + TEXT_45;
               loadItem(EMPTY_TILE,collisionTileX,collisionTileY);
               displayMessage();
-          }
-      }
+              }
+           }
+        }
+      
+      break;
       case SNEACKER:
       // code block
       if (!showMessage){
@@ -612,6 +625,7 @@ void checkEvents(){
                displayMessage();   
           }
       }
+      break;
       case SHORTS:
       // code block
       if (!showMessage){
@@ -622,6 +636,7 @@ void checkEvents(){
               loadItem(EMPTY_TILE, 33,34);
           }
       }
+      break;
       case MUSHROOM:
       // code block
       if (!showMessage){
@@ -686,9 +701,7 @@ void checkEvents(){
   if (waterbottle && sneackers>=2 && level <9){
     level=9;
   }
-  if (eggs>=10){
-      prepareFinale();
-  }
+  
 }
 
 
